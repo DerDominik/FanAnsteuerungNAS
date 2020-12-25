@@ -1,129 +1,139 @@
 #include <Arduino.h>
+#include "smartdebug.h"
 
-// Deklarieren diverser Variablen
-int TestDigInput = 2;
-int TestAInput = 0;
-int FirstValue = 0;
-int SecondInt = 0;
-int SecondValue = 0;
-int TestValue = 0;
-int HDDState = 0;
-int HDDTemp = 0;
-int PWM = 100;
-int StandbyCount = 0;
-int Standby = 0;
+// Notwendige Einstellungen
+#define _SMARTDEBUG         // Ausklammern, um Debug Ausgabe zu deaktiveren
+int PWMPercent = 25;        // PWM Wert in Prozent - Intialstart-Wert fuer Luefter
+int PWMStandby = 25;        // PWM Wert fuer Standby Betrieb
+word Setpoint = 35;         // Soll-Temperatur (zur Berechnung der Luefter Geschwindkeit)
+word FanPin = 9;            // Pin für Luefter
+word FanMaxValue = 200;     // Maximal Wert fuer Luefter-Ansteuerung (muss getestet werden)
+unsigned int WaitTime = 10; // Wartezeit, bis der Luefter nach Ausschalten der HDD ausgeschaltet wird
+
+// Variablen Deklaration
+int RS232Value = 0;         // Eingang aus RS232 (Wert kleiner 100 = Temperatur; Wert = 100 -> HDD aus)
+int HDDActive = 0;          // Merker fuer HDD Zustand (HDDActive = 1 -> HDD läuft; HDDActive = 0 -> HDD aus)
+int HDDTemp = 0;            // Merker fuer HDD Temperatur
+int PWM = 0;                // PWM Wert roh
+int Standby = 0;            // Merker fuer Standby
+word TempGap = 0;           // Temperatur-Unterschied ablegen
+String rs232_simulate;      // Merker fuer RS232 Auswertung
+char puffer[50];            // Puffer fuer RS232 Auswertung
+unsigned long startTime ;   // Timer Startwert 
+unsigned long elapsedTime ; // Timer abgelaufene Zeit
+int TimerStart = 0;         // Merker fuer Timer
+
+// ------------ PWMPercent Ansteuerung ------------
+
+void PWMPercent25kHzBegin() {
+  TCCR2A = 0;                               // TC2 Control Register A
+  TCCR2B = 0;                               // TC2 Control Register B
+  TIMSK2 = 0;                               // TC2 Interrupt Mask Register
+  TIFR2 = 0;                                // TC2 Interrupt Flag Register
+  TCCR2A |= (1 << COM2B1) | (1 << WGM21) | (1 << WGM20);  // OC2B cleared/set on match when up/down counting, fast PWMPercent
+  TCCR2B |= (1 << WGM22) | (1 << CS21);     // prescaler 8
+  OCR2A = FanMaxValue;                               // TOP overflow value (Hz)
+  OCR2B = 0;
+}
+
+void PWMPercentDuty(byte ocrb) {
+  OCR2B = ocrb;                             // PWMPercent Width (duty)
+}
+
+// ------------ PWMPercent Ansteuerung ------------
 
 void setup() {
-    // DigInput als Eingang deklarieren
-    pinMode(TestDigInput, INPUT_PULLUP);
-  Serial.begin(9600);  
-  Serial.println("--- Start Serial Monitor SEND_RCVE ---");
+    pinMode(FanPin, OUTPUT);    // Pin fuer Luefter
+    PWMPercent25kHzBegin();     // PWMPercent Ansteuerung anstoßen
+    DEBUG_INIT(9600);           // Initialisierung der seriellen Schnittstelle
 }
 
 void loop() {
-     // **** Input über USB simulieren ****
-    // DigInput zu erstem String
-    if (digitalRead(TestDigInput) == HIGH) {
-        FirstValue = 100;
-    } else {
-        FirstValue = 200;
+
+    // ------------ RS232 Inhalt empfangen ------------
+    if(Serial.available()){
+        rs232_simulate = Serial.readStringUntil('\n');
+        rs232_simulate.toCharArray(puffer, sizeof puffer);
+        RS232Value = atoi(puffer);
     }
 
-//    Serial.print("Status Digital Input: ");
-//    Serial.print("\t");
-//    Serial.print(FirstValue);
-//    Serial.println();
+    // ------------ RS232 Inhalt auswerten ------------
+    // Wert 0-99 = Temperatur = HDD Aktiv
+    // Wert 100  = HDD inaktiv
 
-    // AInput zu zweitem String
-    SecondValue = (analogRead(TestAInput) / 25 + 10);
-
-//    Serial.print("Status Analog Input String: ");
-//    Serial.print("\t");
-//    Serial.print(SecondValue);
-//    Serial.println();
-       
-    // Beide Strings verknüpfen
-    TestValue = FirstValue + SecondValue;
-
-//    Serial.print("Status Combined: ");
-//    Serial.print("\t");
-//    Serial.print(TestValue);
-//    Serial.println();
-    
-    // **** Input über USB simulieren ****
-
-    // HDD Status anhand TestValue-Wert erkennen
-    if (TestValue > 160) {
-      HDDState = 1;
+    if (RS232Value == 100) {
+      HDDActive = 0;
     } else {
-      HDDState = 0;
+      HDDActive = 1;
     }
 
-    Serial.print("HDD State: ");
-    Serial.print("\t");
-    Serial.print(HDDState);
-    Serial.println();
-
-    // Aus erkanntem HDD-Status die HDD Temperatur rausrechnen
-
-    if (HDDState == 1) {
-      HDDTemp = TestValue - 200;
+    if (HDDActive == 1) {
+      HDDTemp = RS232Value;
     } else {
-      HDDTemp = TestValue - 100;
+      HDDTemp = 0;
     }
 
-    Serial.print("HDD Temperature: ");
-    Serial.print("\t");
-    Serial.print(HDDTemp);
-    Serial.println();
-    
+    // ------------ Ansteuerung Luefer ------------
 
+    // ------------ Zustand HDD ist eingeschaltet ------------
+    if (HDDActive == 1) {
 
-    // Zustand HDD ist eingeschaltet
-    if (HDDState == 1) {
-
-            // War vorher der Standby Modus aktiviert, Startwert zurücksetzen
-            if (StandbyCount != 0) {
-                PWM = 100;
-            }
-
-        // Standby Routine zurücksetzen
         Standby = 0;
-        StandbyCount = 0;
+        startTime = 0;
+        elapsedTime = 0;
+        TimerStart = 0;
 
-        // Schleife für PWM - durch PID ersetzen
-        if (PWM == 110) {
-            PWM = 100;
+    // ------------ Wenn Temperatur kleiner Soll-Temperatur -> Luefter dreht mit 15% ------------
+    // ------------ Wenn Temperatur groesser Soll-Temperatur -> Luefter dreht abhaengig von Temperaturunterschied ------------
+
+        if (HDDTemp < Setpoint) {
+            PWMPercent = 15;
         } else {
-            PWM = PWM + 1;
+            TempGap = HDDTemp - Setpoint;
+            PWMPercent = ( 15 + (TempGap * 2));
         }
 
-
-    // Zustand HDD ist ausgeschaltet
+    // ------------ Zustand HDD ist ausgeschaltet ------------
     } else {
 
-        // Ist der vorherige Timer durchgelaufen, Lüfter ausschalten
+        // ------------ Ist der vorherige Timer durchgelaufen, Lüfter ausschalten ------------
         if (Standby == 1) {
-            PWM = 0;
+            PWMPercent = 1;
             
-        // Lüfter auf x% laufen lassen
+        // ------------ Luefter mit definiertem Standby Wert laufen lassen ------------
         } else {
-            PWM = 25;
+            PWMPercent = PWMStandby;
+
+            // ------------ Timer initialisieren und starten ------------
+            if (TimerStart == 0) {
+                startTime = millis();
+                TimerStart = 1;
+            }
             
-            // Timer für x%
-            if (StandbyCount == 10) {
+            // ------------ Abgelaufene Zeit in Sekunden ermitteln ------------
+            elapsedTime =  (millis() - startTime) / 1000 ;
+
+            // ------------ Wenn Timer abgelaufen, den Luefter ausschalten ------------
+            if (elapsedTime == WaitTime) {
+                PWMPercent = 0;
                 Standby = 1;
             }
-            StandbyCount = StandbyCount + 1;
         }
     }
+ 
+    // ------------ Eigentliche Ansteuerung des Luefters ------------
+    PWM = FanMaxValue / 100 * PWMPercent;
+    PWMPercentDuty(PWM);
 
-    // 1sec Pause nach jedem Durchlauf
-    delay(1000);
-
-    Serial.print("PWM: ");
-    Serial.print("\t");
-    Serial.print(PWM);
-    Serial.println();
+    // ------------ Debug Ausgaben erzeugen ------------
+    Serial.write(12);//ASCII for a Form feed
+    DEBUG_PRINTLN_VALUE("RS232 Value",RS232Value);
+    DEBUG_PRINTLN_VALUE("HDD aktiv? ",HDDActive);
+    DEBUG_PRINTLN_VALUE("HDD Temperatur",HDDTemp);
+    DEBUG_PRINTLN_VALUE("HDD Temp-Gap",TempGap);
+    DEBUG_PRINTLN_VALUE("PWM (Percent)",PWMPercent);
+    DEBUG_PRINTLN_VALUE("PWM (Value)",PWM);
+    DEBUG_PRINTLN_VALUE("Start Time",startTime);
+    DEBUG_PRINTLN_VALUE("Elapsed Time",elapsedTime);
 
 }

@@ -1,0 +1,33 @@
+#include <Arduino.h>
+#define _SMARTDEBUG
+#include "smartdebug.h"
+/* StopWatch
+ * Paul Badger 2008
+ * Demonstrates using millis(), pullup resistors, 
+ * making two things happen at once, printing fractions
+ *
+ * Physical setup: momentary switch connected to pin 4, other side connected to ground
+ * LED with series resistor between pin 13 and ground
+ */
+
+unsigned long startTime ;                    // start time for stop watch
+unsigned long elapsedTime ;                  // elapsed time for stop watch
+int inPin = 2;    // pushbutton connected to digital pin 7
+
+
+void setup()
+{
+    pinMode(inPin, INPUT_PULLUP);    // sets the digital pin 7 as input
+    DEBUG_INIT(9600); // Initialisierung der seriellen Schnittstelle
+}
+
+void loop()
+{
+    if (digitalRead(inPin) == LOW) {
+        startTime = millis();                           // store the start time
+    }
+    elapsedTime =  (millis() - startTime) / 1000 ;              // store elapsed time in sec
+    DEBUG_PRINTLN_VALUE("Start Time",startTime  );
+    DEBUG_PRINTLN_VALUE("Elapsed Time",elapsedTime  );
+    delay (1000);
+}

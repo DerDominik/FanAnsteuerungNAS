@@ -1,0 +1,50 @@
+#include <Arduino.h>
+#define _SMARTDEBUG
+#include "smartdebug.h"
+#include <PID_v1.h>
+
+//Define Variables we'll be connecting to double Setpoint, Input, Output;
+//Define the aggressive and conservative Tuning Parameters
+double Setpoint, Input, Output;
+double aggKp=4, aggKi=0.2, aggKd=1;
+double consKp=1, consKi=0.05, consKd=0.25;
+//Specify the links and initial tuning parameters
+PID myPID(&Input, &Output, &Setpoint, consKp, consKi, consKd, REVERSE);
+
+void setup()
+{
+  // Serial.begin(9600);
+  DEBUG_INIT(9600); // Initialisierung der seriellen Schnittstelle
+  DEBUG_WAIT("Gleich geht's los! Bist du bereit?", true);
+  //Serial.println("--- Start Serial Monitor SEND_RCVE ---");
+  //initialize the variables we're linked to
+  Setpoint = 35;
+  myPID.SetOutputLimits(0, 100);
+  //turn the PID on
+  myPID.SetMode(AUTOMATIC);
+}
+
+void loop()
+{
+  int sensorValue = analogRead(0);
+  Input = map(analogRead(0), 0, 1023, 50, 0);
+    double gap = abs(Setpoint-Input); //distance away from setpoint
+  if(gap<10)
+  {  //we're close to setpoint, use conservative tuning parameters
+    myPID.SetTunings(consKp, consKi, consKd);
+  }
+  else
+  {
+     //we're far from setpoint, use aggressive tuning parameters
+     myPID.SetTunings(aggKp, aggKi, aggKd);
+  }
+  myPID.Compute();
+  analogWrite(3,Output);
+
+  DEBUG_PRINTLN_VALUE("AInput: ",Input);
+  DEBUG_PRINTLN_VALUE("Gap: ",gap);
+  DEBUG_PRINTLN_VALUE("Output: ",Output);
+
+  delay(1000);
+
+}

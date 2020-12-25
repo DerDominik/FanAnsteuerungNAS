@@ -1,0 +1,19 @@
+#include <Arduino.h>
+
+unsigned long time;
+unsigned int rpm;
+String stringRPM;
+void setup()
+{
+   digitalWrite(2, HIGH);   // Starts reading
+   Serial.begin(9600);
+}
+void loop()
+{
+ time = pulseIn(2, HIGH);
+ rpm = (1000000 * 60) / (time * 4);
+ stringRPM = String(rpm);
+ if (stringRPM.length() < 5) {
+   Serial.println(rpm, DEC);
+ }
+}

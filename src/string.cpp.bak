@@ -1,0 +1,35 @@
+#include <Arduino.h>
+#define _SMARTDEBUG
+#include "smartdebug.h"
+
+// String Variable
+int value = 0;
+String my_name;
+char puffer[50];   // genügend gross
+
+void setup()
+{
+  // Serial.begin(9600);
+  DEBUG_INIT(9600); // Initialisierung der seriellen Schnittstelle
+  // DEBUG_WAIT("Gleich geht's los! Bist du bereit?", true);
+  Serial.println("State-Temp-Combination?");
+}
+
+void loop() {
+    if(Serial.available()){
+        my_name = Serial.readStringUntil('\n');
+        DEBUG_PRINTLN_VALUE("String: ",my_name);
+
+        my_name.toCharArray(puffer, sizeof puffer);
+        value = atoi(puffer);
+        DEBUG_PRINTLN_VALUE("Value: ",value);
+        //Serial.println(l);
+        //delay(1000);
+        //value = my_name.toInt();
+        //Serial.println("Int Value: " + value);
+        //delay(1000);
+    }
+    
+
+
+}
