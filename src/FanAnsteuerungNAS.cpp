@@ -1,14 +1,16 @@
 #include <Arduino.h>
-#include "smartdebug.h"
+#include <SoftwareSerial.h>
 
 // Notwendige Einstellungen
-#define _SMARTDEBUG         // Ausklammern, um Debug Ausgabe zu deaktiveren
-int PWMPercent = 25;        // PWM Wert in Prozent - Intialstart-Wert fuer Luefter
-int PWMStandby = 25;        // PWM Wert fuer Standby Betrieb
-word Setpoint = 35;         // Soll-Temperatur (zur Berechnung der Luefter Geschwindkeit)
-word FanPin = 9;            // Pin für Luefter
-word FanMaxValue = 200;     // Maximal Wert fuer Luefter-Ansteuerung (muss getestet werden)
-unsigned int WaitTime = 10; // Wartezeit, bis der Luefter nach Ausschalten der HDD ausgeschaltet wird
+#define _SMARTDEBUG                 // Ausklammern, um Debug Ausgabe zu deaktiveren
+int PWMPercent = 25;                // PWM Wert in Prozent - Intialstart-Wert fuer Luefter
+int PWMStandby = 25;                // PWM Wert fuer Standby Betrieb
+word Setpoint = 35;                 // Soll-Temperatur (zur Berechnung der Luefter Geschwindkeit)
+word FanPin = 9;                    // Pin für Luefter
+word FanMaxValue = 200;             // Maximal Wert fuer Luefter-Ansteuerung (muss getestet werden)
+unsigned int WaitTime = 10;         // Wartezeit, bis der Luefter nach Ausschalten der HDD ausgeschaltet wird
+SoftwareSerial debugSerial(12, 13); // RX TX
+int Debug = 1;                          // Debug aktivieren
 
 // Variablen Deklaration
 int RS232Value = 0;         // Eingang aus RS232 (Wert kleiner 100 = Temperatur; Wert = 100 -> HDD aus)
@@ -43,9 +45,14 @@ void PWMPercentDuty(byte ocrb) {
 // ------------ PWMPercent Ansteuerung ------------
 
 void setup() {
+
+    if (Debug == 1) {
+      debugSerial.begin(9600);
+      debugSerial.println("Debug Monitor");
+    }
+    Serial.begin(9600);
     pinMode(FanPin, OUTPUT);    // Pin fuer Luefter
     PWMPercent25kHzBegin();     // PWMPercent Ansteuerung anstoßen
-    DEBUG_INIT(9600);           // Initialisierung der seriellen Schnittstelle
 }
 
 void loop() {
@@ -126,14 +133,24 @@ void loop() {
     PWMPercentDuty(PWM);
 
     // ------------ Debug Ausgaben erzeugen ------------
-    Serial.write(12);//ASCII for a Form feed
-    DEBUG_PRINTLN_VALUE("RS232 Value",RS232Value);
-    DEBUG_PRINTLN_VALUE("HDD aktiv? ",HDDActive);
-    DEBUG_PRINTLN_VALUE("HDD Temperatur",HDDTemp);
-    DEBUG_PRINTLN_VALUE("HDD Temp-Gap",TempGap);
-    DEBUG_PRINTLN_VALUE("PWM (Percent)",PWMPercent);
-    DEBUG_PRINTLN_VALUE("PWM (Value)",PWM);
-    DEBUG_PRINTLN_VALUE("Start Time",startTime);
-    DEBUG_PRINTLN_VALUE("Elapsed Time",elapsedTime);
+    if (Debug == 1) {
+      debugSerial.write(12);//ASCII for a Form feed
+      debugSerial.print("RS232 Value: ");
+      debugSerial.println(RS232Value);
+      debugSerial.print("HDD aktiv? ");
+      debugSerial.println(HDDActive);
+      debugSerial.print("HDD Temperatur: ");
+      debugSerial.println(HDDTemp);
+      debugSerial.print("HDD Temp-Gap: ");
+      debugSerial.println(TempGap);
+      debugSerial.print("PWM (Percent): ");
+      debugSerial.println(PWMPercent);
+      debugSerial.print("PWM (Value): ");
+      debugSerial.println(PWM);
+      debugSerial.print("Start Time: ");
+      debugSerial.println(startTime);
+      debugSerial.print("Elapsed Time: ");
+      debugSerial.println(elapsedTime);
+    }
 
 }
