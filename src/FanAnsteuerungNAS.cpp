@@ -5,12 +5,13 @@
 #define _SMARTDEBUG                 // Ausklammern, um Debug Ausgabe zu deaktiveren
 int PWMPercent = 25;                // PWM Wert in Prozent - Intialstart-Wert fuer Luefter
 int PWMStandby = 25;                // PWM Wert fuer Standby Betrieb
-word Setpoint = 35;                 // Soll-Temperatur (zur Berechnung der Luefter Geschwindkeit)
-word FanPin = 9;                    // Pin für Luefter
+int Setpoint = 25;                  // Soll-Temperatur (zur Berechnung der Luefter Geschwindkeit)
+word FanPin = 3;                    // Pin für Luefter
 word FanMaxValue = 200;             // Maximal Wert fuer Luefter-Ansteuerung (muss getestet werden)
 unsigned int WaitTime = 10;         // Wartezeit, bis der Luefter nach Ausschalten der HDD ausgeschaltet wird
 SoftwareSerial debugSerial(12, 13); // RX TX
-int Debug = 1;                          // Debug aktivieren
+int Debug = 0;                      // Debug aktivieren
+int FanStop = 2;                    // PWMPercentWert für gestoppten Luefter
 
 // Variablen Deklaration
 int RS232Value = 0;         // Eingang aus RS232 (Wert kleiner 100 = Temperatur; Wert = 100 -> HDD aus)
@@ -93,11 +94,11 @@ void loop() {
     // ------------ Wenn Temperatur kleiner Soll-Temperatur -> Luefter dreht mit 15% ------------
     // ------------ Wenn Temperatur groesser Soll-Temperatur -> Luefter dreht abhaengig von Temperaturunterschied ------------
 
-        if (HDDTemp < Setpoint) {
-            PWMPercent = 15;
+        if (HDDTemp <= Setpoint) {
+          PWMPercent = FanStop;
         } else {
-            TempGap = HDDTemp - Setpoint;
-            PWMPercent = ( 15 + (TempGap * 2));
+          TempGap = HDDTemp - Setpoint;
+          PWMPercent = ( 15 + (TempGap * 2));
         }
 
     // ------------ Zustand HDD ist ausgeschaltet ------------
@@ -105,7 +106,7 @@ void loop() {
 
         // ------------ Ist der vorherige Timer durchgelaufen, Lüfter ausschalten ------------
         if (Standby == 1) {
-            PWMPercent = 1;
+            PWMPercent = FanStop;
             
         // ------------ Luefter mit definiertem Standby Wert laufen lassen ------------
         } else {
